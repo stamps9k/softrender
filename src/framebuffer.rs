@@ -141,32 +141,32 @@ mod tests {
   #[test]
   fn test_dimensions() {
     let fb = Framebuffer::new(800, 600);
-    assert_eq!(fb.width, 800);
-    assert_eq!(fb.height, 600);
-    assert_eq!(fb.data.len(), 800 * 600 * 3);
+    assert_eq!(fb.as_ref().unwrap().width, 800);
+    assert_eq!(fb.as_ref().unwrap().height, 600);
+    assert_eq!(fb.as_ref().unwrap().data.len(), 800 * 600 * 3);
   }
 
   #[test]
   fn test_set_and_get_pixel() {
     let mut fb = Framebuffer::new(10, 10);
-    fb.set_pixel(3, 7, 255, 128, 0);
-    assert_eq!(fb.get_pixel(3, 7), (255, 128, 0));
+    fb.as_mut().unwrap().set_pixel(3, 7, 255, 128, 0);
+    assert_eq!(fb.as_ref().unwrap().get_pixel(3, 7), (255, 128, 0));
   }
 
   #[test]
   fn test_out_of_bounds_does_not_panic() {
     let mut fb = Framebuffer::new(10, 10);
-    fb.set_pixel(10, 10, 255, 0, 0); // exactly at boundary — should be ignored
-    fb.set_pixel(100, 100, 255, 0, 0); // way out — should be ignored
+    fb.as_mut().unwrap().set_pixel(10, 10, 255, 0, 0); // exactly at boundary — should be ignored
+    fb.as_mut().unwrap().set_pixel(100, 100, 255, 0, 0); // way out — should be ignored
   }
 
   #[test]
   fn test_clear() {
     let mut fb = Framebuffer::new(4, 4);
-    fb.clear(100, 150, 200);
+    fb.as_mut().unwrap().clear(100, 150, 200);
     for y in 0..4 {
       for x in 0..4 {
-        assert_eq!(fb.get_pixel(x, y), (100, 150, 200));
+        assert_eq!(fb.as_ref().unwrap().get_pixel(x, y), (100, 150, 200));
       }
     }
   }
@@ -178,12 +178,17 @@ mod tests {
     // Paint a simple gradient so the file is visually non-trivial
     for y in 0..64 {
       for x in 0..64 {
-        fb.set_pixel(x, y, (x * 4) as u8, (y * 4) as u8, 128);
+        fb.as_mut()
+          .unwrap()
+          .set_pixel(x, y, (x * 4) as u8, (y * 4) as u8, 128);
       }
     }
 
     let path = PathBuf::from("/tmp/test_output.ppm");
-    fb.save_ppm(&path).expect("Failed to write PPM");
+    fb.as_ref()
+      .unwrap()
+      .save_ppm(&path)
+      .expect("Failed to write PPM");
     assert!(path.exists());
   }
 }
