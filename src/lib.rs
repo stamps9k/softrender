@@ -1,5 +1,7 @@
 mod framebuffer;
 pub use framebuffer::Framebuffer;
+mod rasterizer;
+pub use rasterizer::fill_triangle;
 
 use wasm_bindgen::prelude::*;
 
