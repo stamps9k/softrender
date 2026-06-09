@@ -1,3 +1,6 @@
+mod framebuffer;
+pub use framebuffer::Framebuffer;
+
 use wasm_bindgen::prelude::*;
 
 /// A short test function to ensure that lib and wasm are working correctly.
