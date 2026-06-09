@@ -4,3 +4,4 @@ set -e
 cargo fmt
 git add -u
 cargo clippy -- -D warnings
+cargo test
