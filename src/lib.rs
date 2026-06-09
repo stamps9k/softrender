@@ -36,3 +36,44 @@ pub fn solid_frame(width: u32, height: u32) -> Result<Vec<u8>, String> {
 
   Ok(buffer)
 }
+
+/// Render a test triangle to a framebuffer and return the result as RGBA.
+///
+/// # Errors
+///
+/// Returns `Err` if the framebuffer cannot be created with the given dimensions.
+#[wasm_bindgen]
+pub fn render_test_triangle(
+  width: usize,
+  height: usize,
+) -> Result<Vec<u8>, JsValue> {
+  #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+  let width_i32 = (width as i32).checked_sub(10).ok_or_else(|| {
+    JsValue::from_str(
+      "render_test_triangle: width too small to compute triangle vertices",
+    )
+  })?;
+  #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+  let height_i32 = (height as i32).checked_sub(10).ok_or_else(|| {
+    JsValue::from_str(
+      "render_test_triangle: height too small to compute triangle vertices",
+    )
+  })?;
+  #[allow(
+    clippy::integer_division,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+  )]
+  let mid_x = (width as i32) / 2;
+
+  let mut fb: Framebuffer =
+    Framebuffer::new(width, height).map_err(|e| JsValue::from_str(&e))?;
+  fill_triangle(
+    &mut fb,
+    (10, 10),
+    (width_i32, 10),
+    (mid_x, height_i32),
+    [255, 0, 0],
+  );
+  Ok(fb.into_rgba())
+}

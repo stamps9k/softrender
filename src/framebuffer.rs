@@ -131,6 +131,33 @@ impl Framebuffer {
 
     Ok(())
   }
+
+  /// Convert the framebuffer to a flat RGBA `Vec<u8>` suitable for use with
+  /// the browser canvas `putImageData` API.
+  ///
+  /// # Panics
+  ///
+  /// Panics if internal index arithmetic overflows, which should be
+  /// impossible if the framebuffer was constructed successfully.
+  #[must_use]
+  pub fn into_rgba(&self) -> Vec<u8> {
+    #[allow(clippy::panic)]
+		let capacity = self.width
+  		.checked_mul(self.height)
+  		.and_then(|v| v.checked_mul(4))
+  		.unwrap_or_else(|| {
+    		panic!("into_rgba overflow: framebuffer dimensions suggest a logic error in the caller")
+  		});
+    let mut rgba = Vec::with_capacity(capacity);
+
+    for chunk in self.data.chunks_exact(3) {
+      rgba.push(chunk[0]);
+      rgba.push(chunk[1]);
+      rgba.push(chunk[2]);
+      rgba.push(255);
+    }
+    rgba
+  }
 }
 
 #[cfg(test)]
