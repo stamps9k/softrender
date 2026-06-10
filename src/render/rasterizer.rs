@@ -1,6 +1,6 @@
-use crate::Framebuffer;
-use crate::ScreenVertex;
-use crate::ZBuffer;
+use super::framebuffer::Framebuffer;
+use super::screen_vertex::ScreenVertex;
+use super::zbuffer::ZBuffer;
 
 /// Compute the edge function for two vertices `a`, `b` and a point `p`.
 ///

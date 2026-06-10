@@ -1,11 +1,9 @@
-mod framebuffer;
-pub use framebuffer::Framebuffer;
-mod rasterizer;
-pub use rasterizer::fill_triangle;
-mod zbuffer;
-pub use zbuffer::ZBuffer;
-mod screen_vertex;
-pub use screen_vertex::ScreenVertex;
+pub mod render;
+
+use render::rasterizer::fill_triangle;
+use render::Framebuffer;
+use render::ScreenVertex;
+use render::ZBuffer;
 
 use wasm_bindgen::prelude::*;
 
