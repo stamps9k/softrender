@@ -1,4 +1,5 @@
 pub mod render;
+pub mod math;
 
 use render::rasterizer::fill_triangle;
 use render::Framebuffer;
