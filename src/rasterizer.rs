@@ -172,7 +172,7 @@ mod tests {
     assert_eq!(fb.unwrap().get_pixel(4, 3), (0, 0, 0));
   }
 
-	#[test]
+  #[test]
   fn test_fill_triangle_zbuffer() {
     let mut fb = Framebuffer::new(10, 10);
     let mut zb = ZBuffer::new(10, 10);
