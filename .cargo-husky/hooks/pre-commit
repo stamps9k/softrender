@@ -1,7 +1,10 @@
 #!/bin/sh
 set -e
 
-cargo fmt
-# git add -u
+cargo fmt --check
+if [ $? -ne 0 ]; then
+  echo "cargo fmt found issues. Run 'cargo fmt' and re-stage."
+  exit 1
+fi
 cargo clippy -- -D warnings
 cargo test --target aarch64-unknown-linux-musl --lib
