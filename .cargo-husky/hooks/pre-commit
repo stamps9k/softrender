@@ -2,6 +2,6 @@
 set -e
 
 cargo fmt
-git add -u
+# git add -u
 cargo clippy -- -D warnings
 cargo test --target aarch64-unknown-linux-musl --lib

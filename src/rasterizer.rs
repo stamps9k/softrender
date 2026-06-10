@@ -1,4 +1,6 @@
 use crate::Framebuffer;
+use crate::ScreenVertex;
+use crate::ZBuffer;
 
 /// Compute the edge function for two vertices `a`, `b` and a point `p`.
 ///
@@ -40,19 +42,16 @@ fn edge_function(ax: i32, ay: i32, bx: i32, by: i32, px: i32, py: i32) -> i32 {
 /// Does not panic. Out-of-bounds pixels are clipped by [`Framebuffer::set_pixel`].
 pub fn fill_triangle(
   fb: &mut Framebuffer,
-  v0: (i32, i32),
-  v1: (i32, i32),
-  v2: (i32, i32),
+  zb: &mut ZBuffer,
+  v0: ScreenVertex,
+  v1: ScreenVertex,
+  v2: ScreenVertex,
   color: [u8; 3],
 ) {
-  let (x0, y0) = v0;
-  let (x1, y1) = v1;
-  let (x2, y2) = v2;
-
   // Compute the area of the triangle (doubled) using the edge function.
   // If zero, the triangle is degenerate (collinear points); skip it.
   // If negative, the triangle is clockwise; skip it (backface cull).
-  let area = edge_function(x0, y0, x1, y1, x2, y2);
+  let area = edge_function(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
   if area <= 0 {
     return;
   }
@@ -70,24 +69,36 @@ pub fn fill_triangle(
   });
 
   #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-  let max_x = x0.max(x1).max(x2).min(fb_width);
+  let max_x = v0.x.max(v1.x).max(v2.x).min(fb_width);
   #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-  let max_y = y0.max(y1).max(y2).min(fb_height);
-  let min_x = x0.min(x1).min(x2).max(0);
-  let min_y = y0.min(y1).min(y2).max(0);
+  let max_y = v0.y.max(v1.y).max(v2.y).min(fb_height);
+  let min_x = v0.x.min(v1.x).min(v2.x).max(0);
+  let min_y = v0.y.min(v1.y).min(v2.y).max(0);
 
   // Iterate over every pixel in the bounding box.
   for py in min_y..=max_y {
     for px in min_x..=max_x {
       // Evaluate the edge function for each edge at this pixel.
-      let w0 = edge_function(x1, y1, x2, y2, px, py);
-      let w1 = edge_function(x2, y2, x0, y0, px, py);
-      let w2 = edge_function(x0, y0, x1, y1, px, py);
+      #[allow(clippy::cast_precision_loss)]
+      let w0 =
+        edge_function(v1.x, v1.y, v2.x, v2.y, px, py) as f32 / area as f32;
+      #[allow(clippy::cast_precision_loss)]
+      let w1 =
+        edge_function(v2.x, v2.y, v0.x, v0.y, px, py) as f32 / area as f32;
+      #[allow(clippy::cast_precision_loss)]
+      let w2 =
+        edge_function(v0.x, v0.y, v1.x, v1.y, px, py) as f32 / area as f32;
 
       // The pixel is inside the triangle if all three are non-negative.
-      if w0 >= 0 && w1 >= 0 && w2 >= 0 {
+      if w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 {
         #[allow(clippy::cast_sign_loss)]
-        fb.set_pixel(px as usize, py as usize, color[0], color[1], color[2]);
+        let z = w0 * v0.z + w1 * v1.z + w2 * v2.z;
+
+        // Pixel is inside triangle, so coordinates must be non-negative and fit in i32 so casting to usize is safe.
+        #[allow(clippy::cast_sign_loss)]
+        if zb.test_and_set(px as usize, py as usize, z) {
+          fb.set_pixel(px as usize, py as usize, color[0], color[1], color[2]);
+        }
       }
     }
   }
@@ -103,9 +114,10 @@ mod tests {
     // A large triangle that covers the center of the framebuffer.
     fill_triangle(
       &mut fb.as_mut().unwrap(),
-      (0, 0),
-      (9, 0),
-      (4, 9),
+      &mut ZBuffer::new(10, 10),
+      ScreenVertex::new(0, 0, 0.0),
+      ScreenVertex::new(9, 0, 0.0),
+      ScreenVertex::new(4, 9, 0.0),
       [255, 0, 0],
     );
     // The centroid (~4, 3) should be red.
@@ -115,11 +127,13 @@ mod tests {
   #[test]
   fn test_fill_triangle_corner_pixel_outside() {
     let mut fb = Framebuffer::new(10, 10);
+    let mut zb = ZBuffer::new(10, 10);
     fill_triangle(
       &mut fb.as_mut().unwrap(),
-      (0, 0),
-      (9, 0),
-      (4, 9),
+      &mut zb,
+      ScreenVertex::new(0, 0, 0.0),
+      ScreenVertex::new(9, 0, 0.0),
+      ScreenVertex::new(4, 9, 0.0),
       [255, 0, 0],
     );
     // Bottom-right corner should be untouched.
@@ -129,12 +143,14 @@ mod tests {
   #[test]
   fn test_fill_triangle_degenerate_skipped() {
     let mut fb = Framebuffer::new(10, 10);
+    let mut zb = ZBuffer::new(10, 10);
     // Three collinear points — should draw nothing.
     fill_triangle(
       &mut fb.as_mut().unwrap(),
-      (0, 0),
-      (5, 0),
-      (9, 0),
+      &mut zb,
+      ScreenVertex::new(0, 0, 0.0),
+      ScreenVertex::new(5, 0, 0.0),
+      ScreenVertex::new(9, 0, 0.0),
       [255, 0, 0],
     );
     assert_eq!(fb.unwrap().get_pixel(5, 0), (0, 0, 0));
@@ -143,14 +159,40 @@ mod tests {
   #[test]
   fn test_fill_triangle_clockwise_skipped() {
     let mut fb = Framebuffer::new(10, 10);
+    let mut zb = ZBuffer::new(10, 10);
     // Same triangle as the first test but with vertices in clockwise order.
     fill_triangle(
       &mut fb.as_mut().unwrap(),
-      (4, 9),
-      (9, 0),
-      (0, 0),
+      &mut zb,
+      ScreenVertex::new(4, 9, 0.0),
+      ScreenVertex::new(9, 0, 0.0),
+      ScreenVertex::new(0, 0, 0.0),
       [255, 0, 0],
     );
     assert_eq!(fb.unwrap().get_pixel(4, 3), (0, 0, 0));
+  }
+
+  fn test_fill_triangle_zbuffer() {
+    let mut fb = Framebuffer::new(10, 10);
+    let mut zb = ZBuffer::new(10, 10);
+    // Two overlapping triangles with different depths.
+    fill_triangle(
+      &mut fb.as_mut().unwrap(),
+      &mut zb,
+      ScreenVertex::new(0, 0, 0.5),
+      ScreenVertex::new(9, 0, 0.5),
+      ScreenVertex::new(4, 9, 0.5),
+      [255, 0, 0],
+    );
+    fill_triangle(
+      &mut fb.as_mut().unwrap(),
+      &mut zb,
+      ScreenVertex::new(0, 0, 0.0),
+      ScreenVertex::new(9, 0, 0.0),
+      ScreenVertex::new(4, 9, 0.0),
+      [0, 255, 0],
+    );
+    // The second triangle is closer and should overwrite the first.
+    assert_eq!(fb.unwrap().get_pixel(4, 3), (0, 255, 0));
   }
 }

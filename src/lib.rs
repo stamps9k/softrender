@@ -2,6 +2,10 @@ mod framebuffer;
 pub use framebuffer::Framebuffer;
 mod rasterizer;
 pub use rasterizer::fill_triangle;
+mod zbuffer;
+pub use zbuffer::ZBuffer;
+mod screen_vertex;
+pub use screen_vertex::ScreenVertex;
 
 use wasm_bindgen::prelude::*;
 
@@ -68,12 +72,28 @@ pub fn render_test_triangle(
 
   let mut fb: Framebuffer =
     Framebuffer::new(width, height).map_err(|e| JsValue::from_str(&e))?;
+  let mut zb = ZBuffer::new(width, height);
+
+  #[allow(clippy::integer_division)]
+  // The triangle vertices are painting a test pattern, so truncation is acceptable and intentional.
   fill_triangle(
     &mut fb,
-    (10, 10),
-    (width_i32, 10),
-    (mid_x, height_i32),
+    &mut zb,
+    ScreenVertex::new(10, 10, -1.0), //Top Left
+    ScreenVertex::new(width_i32 / 2, 10, 1.0), //Top Right
+    ScreenVertex::new(mid_x, height_i32, 1.0), //Bottom Middle
     [255, 0, 0],
+  );
+
+  #[allow(clippy::integer_division)]
+  // The triangle vertices are painting a test pattern, so truncation is acceptable and intentional.
+  fill_triangle(
+    &mut fb,
+    &mut zb,
+    ScreenVertex::new(width_i32 / 3, 10, 0.0), //Top Left
+    ScreenVertex::new(width_i32, 10, 0.0),     //Top Right
+    ScreenVertex::new(mid_x, height_i32, 0.0), //Bottom Middle
+    [0, 255, 0],
   );
   Ok(fb.into_rgba())
 }
