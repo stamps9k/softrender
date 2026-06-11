@@ -1,9 +1,11 @@
+pub mod camera;
 pub mod math;
 pub mod render;
 
+use camera::Camera;
+use math::Vec3;
 use render::rasterizer::fill_triangle;
 use render::Framebuffer;
-use render::ScreenVertex;
 use render::ZBuffer;
 
 use wasm_bindgen::prelude::*;
@@ -42,57 +44,77 @@ pub fn solid_frame(width: u32, height: u32) -> Result<Vec<u8>, String> {
 
 /// Render a test triangle to a framebuffer and return the result as RGBA.
 ///
+/// # Arguments
+///
+/// * `width` - The width of the frame in pixels
+/// * `height` - The height of the frame in pixels
+///
+/// # Returns
+///
+/// A `Vec<u8>` containing RGBA pixel data of the rendered scene, where each
+/// pixel is represented by 4 bytes (R, G, B, A).
+///
 /// # Errors
 ///
-/// Returns `Err` if the framebuffer cannot be created with the given dimensions.
+/// Returns `Err` if the framebuffer cannot be created with the given
+/// dimensions.
 #[wasm_bindgen]
 pub fn render_test_triangle(
   width: usize,
   height: usize,
 ) -> Result<Vec<u8>, JsValue> {
-  #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-  let width_i32 = (width as i32).checked_sub(10).ok_or_else(|| {
-    JsValue::from_str(
-      "render_test_triangle: width too small to compute triangle vertices",
-    )
-  })?;
-  #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-  let height_i32 = (height as i32).checked_sub(10).ok_or_else(|| {
-    JsValue::from_str(
-      "render_test_triangle: height too small to compute triangle vertices",
-    )
-  })?;
-  #[allow(
-    clippy::integer_division,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap
-  )]
-  let mid_x = (width as i32) / 2;
+  #[allow(clippy::cast_precision_loss)]
+  let (screen_width, screen_height) = (width as f32, height as f32);
 
-  let mut fb: Framebuffer =
+  let camera = Camera::new(
+    Vec3::new(0.0, 0.0, 3.0), // eye: sitting 3 units back on the z axis
+    Vec3::new(0.0, 0.0, 0.0), // target: looking at the origin
+    Vec3::new(0.0, 1.0, 0.0), // up: y is up
+    std::f32::consts::FRAC_PI_4, // fov_y: 45 degrees
+    screen_width / screen_height, // aspect
+    0.1,                      // near
+    100.0,                    // far
+  );
+
+  let mut fb =
     Framebuffer::new(width, height).map_err(|e| JsValue::from_str(&e))?;
   let mut zb = ZBuffer::new(width, height);
 
-  #[allow(clippy::integer_division)]
-  // The triangle vertices are painting a test pattern, so truncation is acceptable and intentional.
-  fill_triangle(
-    &mut fb,
-    &mut zb,
-    ScreenVertex::new(10, 10, -1.0), //Top Left
-    ScreenVertex::new(width_i32 / 2, 10, 1.0), //Top Right
-    ScreenVertex::new(mid_x, height_i32, 1.0), //Bottom Middle
-    [255, 0, 0],
+  // Red triangle — centred slightly to the left
+  let v0 = camera.project_vertex(
+    Vec3::new(-0.75, 0.5, 0.0),
+    screen_width,
+    screen_height,
   );
+  let v1 = camera.project_vertex(
+    Vec3::new(0.25, 0.5, 0.0),
+    screen_width,
+    screen_height,
+  );
+  let v2 = camera.project_vertex(
+    Vec3::new(-0.25, -0.5, 0.0),
+    screen_width,
+    screen_height,
+  );
+  fill_triangle(&mut fb, &mut zb, v0, v1, v2, [255, 0, 0]);
 
-  #[allow(clippy::integer_division)]
-  // The triangle vertices are painting a test pattern, so truncation is acceptable and intentional.
-  fill_triangle(
-    &mut fb,
-    &mut zb,
-    ScreenVertex::new(width_i32 / 3, 10, 0.0), //Top Left
-    ScreenVertex::new(width_i32, 10, 0.0),     //Top Right
-    ScreenVertex::new(mid_x, height_i32, 0.0), //Bottom Middle
-    [0, 255, 0],
+  // Green triangle — centred slightly to the right and pushed further back
+  let v3 = camera.project_vertex(
+    Vec3::new(-0.25, 0.5, -0.5),
+    screen_width,
+    screen_height,
   );
+  let v4 = camera.project_vertex(
+    Vec3::new(0.75, 0.5, -0.5),
+    screen_width,
+    screen_height,
+  );
+  let v5 = camera.project_vertex(
+    Vec3::new(0.25, -0.5, -0.5),
+    screen_width,
+    screen_height,
+  );
+  fill_triangle(&mut fb, &mut zb, v3, v4, v5, [0, 255, 0]);
+
   Ok(fb.into_rgba())
 }
