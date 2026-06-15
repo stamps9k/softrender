@@ -41,6 +41,16 @@ impl Vec4 {
     Self::new(v.x, v.y, v.z, w)
   }
 
+  /// Creates a `Vec4` from a `Vec3` and a `w` component.
+  ///
+  /// Demotes a 4D vector to back to 3D coordinates for converting back to down
+  /// to screen space.
+  /// Simple dropping of the w component.
+  #[must_use]
+  pub fn to_vec3(self) -> Vec3 {
+    Vec3::new(self.x, self.y, self.z)
+  }
+
   /// Returns the dot product of `self` and `rhs`.
   ///
   /// Computes the sum of the products of each corresponding component,

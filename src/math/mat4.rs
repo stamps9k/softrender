@@ -156,7 +156,7 @@ impl Mat4 {
   pub fn look_at(eye: Vec3, target: Vec3, up: Vec3) -> Self {
     let dir = target - eye;
     let f = dir.normalise();
-    let r = f.cross(up).normalise();
+    let r = up.cross(f).normalise();
     let u = r.cross(f);
 
     Self::new([
@@ -245,7 +245,7 @@ impl Mat4 {
   // and an inner summation index k. Direct range indexing maps cleanly to the
   // mathematical notation and is clearer than any iterator-based alternative.
   #[allow(clippy::needless_range_loop)]
-  pub fn mul_mat4(self, rhs: Self) -> Self {
+  pub fn mul_mat4(&self, rhs: Self) -> Self {
     let mut result = [[0.0f32; 4]; 4];
     for i in 0..4 {
       for j in 0..4 {

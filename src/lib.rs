@@ -1,13 +1,17 @@
 pub mod camera;
+pub mod geometry;
 pub mod math;
 pub mod render;
+pub mod renderer;
 
 use camera::Camera;
 use math::Vec3;
 use render::rasterizer::fill_triangle;
 use render::Framebuffer;
 use render::ZBuffer;
+use renderer::Renderer;
 
+use js_sys::Uint8Array;
 use wasm_bindgen::prelude::*;
 
 /// A short test function to ensure that lib and wasm are working correctly.
@@ -80,41 +84,81 @@ pub fn render_test_triangle(
     Framebuffer::new(width, height).map_err(|e| JsValue::from_str(&e))?;
   let mut zb = ZBuffer::new(width, height);
 
-  // Red triangle — centred slightly to the left
   let v0 = camera.project_vertex(
     Vec3::new(-0.75, 0.5, 0.0),
     screen_width,
     screen_height,
   );
   let v1 = camera.project_vertex(
-    Vec3::new(0.25, 0.5, 0.0),
+    Vec3::new(-0.25, -0.5, 0.0),
     screen_width,
     screen_height,
   );
   let v2 = camera.project_vertex(
-    Vec3::new(-0.25, -0.5, 0.0),
+    Vec3::new(0.25, 0.5, 0.0),
     screen_width,
     screen_height,
   );
   fill_triangle(&mut fb, &mut zb, v0, v1, v2, [255, 0, 0]);
 
-  // Green triangle — centred slightly to the right and pushed further back
   let v3 = camera.project_vertex(
     Vec3::new(-0.25, 0.5, -0.5),
     screen_width,
     screen_height,
   );
   let v4 = camera.project_vertex(
-    Vec3::new(0.75, 0.5, -0.5),
+    Vec3::new(0.25, -0.5, -0.5),
     screen_width,
     screen_height,
   );
   let v5 = camera.project_vertex(
-    Vec3::new(0.25, -0.5, -0.5),
+    Vec3::new(0.75, 0.5, -0.5),
     screen_width,
     screen_height,
   );
   fill_triangle(&mut fb, &mut zb, v3, v4, v5, [0, 255, 0]);
 
-  Ok(fb.into_rgba())
+  Ok(fb.as_rgba().to_vec())
+}
+
+/// A WASM-exposed renderer that maintains scene and pipeline state across
+/// frames.
+///
+/// Construct once with [`WasmRenderer::new`], then call
+/// [`WasmRenderer::render_frame`] each animation tick.
+#[wasm_bindgen]
+pub struct WasmRenderer {
+  inner: Renderer,
+}
+
+#[wasm_bindgen]
+impl WasmRenderer {
+  /// Creates a new [`WasmRenderer`] with the given viewport dimensions.
+  ///
+  /// # Arguments
+  ///
+  /// * `width` - Viewport width in pixels
+  /// * `height` - Viewport height in pixels
+  ///
+  /// # Errors
+  ///
+  /// Returns `Err` if the framebuffer dimensions overflow `usize`.
+  #[wasm_bindgen(constructor)]
+  pub fn new(width: usize, height: usize) -> Result<WasmRenderer, JsValue> {
+    let inner =
+      Renderer::new(width, height).map_err(|e| JsValue::from_str(&e))?;
+    Ok(Self { inner })
+  }
+
+  /// Renders a single frame and returns the RGBA pixel data as a
+  /// [`Uint8Array`] suitable for use with the browser canvas `putImageData`
+  /// API.
+  ///
+  /// # Arguments
+  ///
+  /// * `timestamp_ms` - Elapsed time in milliseconds, typically from
+  ///   `requestAnimationFrame`
+  pub fn render_frame(&mut self, timestamp_ms: f64) -> Uint8Array {
+    Uint8Array::from(self.inner.render_frame(timestamp_ms))
+  }
 }

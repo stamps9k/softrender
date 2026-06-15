@@ -5,7 +5,7 @@ use std::path::Path;
 pub struct Framebuffer {
   pub width: usize,
   pub height: usize,
-  data: Vec<u8>, // Packed RGB triples: [R, G, B, R, G, B, ...]
+  data: Vec<u8>, // Packed RGBA quads: [R, G, B, A, R, G, B, A, ...]
 }
 
 impl Framebuffer {
@@ -13,18 +13,17 @@ impl Framebuffer {
   ///
   /// # Errors
   ///
-  /// Returns an error if `width * height * 3` overflows `usize`.
+  /// Returns an error if `width * height * 4` overflows `usize`.
   pub fn new(width: usize, height: usize) -> Result<Self, String> {
-    let len = width
-      .checked_mul(height)
-      .and_then(|n| n.checked_mul(3))
-      .ok_or_else(|| {
-        format!("Framebuffer dimensions {width}x{height} overflow usize")
-      })?;
+    let len = width.checked_mul(height).ok_or_else(|| {
+      format!("Framebuffer dimensions {width}x{height} overflow usize")
+    })?;
+    let data = [0u8, 0u8, 0u8, 255u8].repeat(len);
+
     Ok(Self {
       width,
       height,
-      data: vec![0u8; len],
+      data,
     })
   }
 
@@ -47,20 +46,23 @@ impl Framebuffer {
     let Some(index) = y
       .checked_mul(self.width)
       .and_then(|n| n.checked_add(x))
-      .and_then(|n| n.checked_mul(3))
+      .and_then(|n| n.checked_mul(4))
     else {
       panic!("index arithmetic overflowed despite bounds check — this is a bug")
     };
 
-    let (Some(index1), Some(index2)) =
-      (index.checked_add(1), index.checked_add(2))
-    else {
+    let (Some(index1), Some(index2), Some(index3)) = (
+      index.checked_add(1),
+      index.checked_add(2),
+      index.checked_add(3),
+    ) else {
       panic!("index arithmetic overflowed despite bounds check — this is a bug")
     };
 
     self.data[index] = r;
     self.data[index1] = g;
     self.data[index2] = b;
+    self.data[index3] = 255;
   }
 
   /// Read the RGB colour at (x, y).
@@ -83,7 +85,7 @@ impl Framebuffer {
     let Some(index) = y
       .checked_mul(self.width)
       .and_then(|n| n.checked_add(x))
-      .and_then(|n| n.checked_mul(3))
+      .and_then(|n| n.checked_mul(4))
     else {
       panic!("index arithmetic overflowed despite bounds check — this is a bug")
     };
@@ -97,14 +99,14 @@ impl Framebuffer {
     (self.data[index], self.data[index1], self.data[index2])
   }
 
-  /// Fill the entire framebuffer with a single colour.
+  /// Fill the entire framebuffer with a single RGB colour.
   #[allow(clippy::many_single_char_names)]
-  #[allow(clippy::panic)]
   pub fn clear(&mut self, r: u8, g: u8, b: u8) {
-    for chunk in self.data.chunks_exact_mut(3) {
+    for chunk in self.data.chunks_exact_mut(4) {
       chunk[0] = r;
       chunk[1] = g;
       chunk[2] = b;
+      chunk[3] = 255;
     }
   }
 
@@ -126,37 +128,22 @@ impl Framebuffer {
     writeln!(writer, "{} {}", self.width, self.height)?;
     writeln!(writer, "255")?;
 
-    // Raw RGB bytes — no separators needed in P6 format
-    writer.write_all(&self.data)?;
+    // PPM is RGB only — write the first three bytes of each RGBA quad
+    for chunk in self.data.chunks_exact(4) {
+      writer.write_all(&chunk[..3])?;
+    }
 
     Ok(())
   }
 
-  /// Convert the framebuffer to a flat RGBA `Vec<u8>` suitable for use with
-  /// the browser canvas `putImageData` API.
+  /// Returns the framebuffer contents as a slice of RGBA bytes, suitable
+  /// for use with the browser canvas `putImageData` API.
   ///
-  /// # Panics
-  ///
-  /// Panics if internal index arithmetic overflows, which should be
-  /// impossible if the framebuffer was constructed successfully.
+  /// Each pixel is four consecutive bytes in `[R, G, B, A]` order, with
+  /// alpha always set to 255.
   #[must_use]
-  pub fn into_rgba(&self) -> Vec<u8> {
-    #[allow(clippy::panic)]
-		let capacity = self.width
-  		.checked_mul(self.height)
-  		.and_then(|v| v.checked_mul(4))
-  		.unwrap_or_else(|| {
-    		panic!("into_rgba overflow: framebuffer dimensions suggest a logic error in the caller")
-  		});
-    let mut rgba = Vec::with_capacity(capacity);
-
-    for chunk in self.data.chunks_exact(3) {
-      rgba.push(chunk[0]);
-      rgba.push(chunk[1]);
-      rgba.push(chunk[2]);
-      rgba.push(255);
-    }
-    rgba
+  pub fn as_rgba(&self) -> &[u8] {
+    &self.data
   }
 }
 
@@ -170,7 +157,7 @@ mod tests {
     let fb = Framebuffer::new(800, 600);
     assert_eq!(fb.as_ref().unwrap().width, 800);
     assert_eq!(fb.as_ref().unwrap().height, 600);
-    assert_eq!(fb.as_ref().unwrap().data.len(), 800 * 600 * 3);
+    assert_eq!(fb.as_ref().unwrap().data.len(), 800 * 600 * 4);
   }
 
   #[test]
@@ -183,8 +170,8 @@ mod tests {
   #[test]
   fn test_out_of_bounds_does_not_panic() {
     let mut fb = Framebuffer::new(10, 10);
-    fb.as_mut().unwrap().set_pixel(10, 10, 255, 0, 0); // exactly at boundary — should be ignored
-    fb.as_mut().unwrap().set_pixel(100, 100, 255, 0, 0); // way out — should be ignored
+    fb.as_mut().unwrap().set_pixel(10, 10, 255, 0, 0);
+    fb.as_mut().unwrap().set_pixel(100, 100, 255, 0, 0);
   }
 
   #[test]
@@ -199,23 +186,35 @@ mod tests {
   }
 
   #[test]
-  fn test_save_ppm() {
-    let mut fb = Framebuffer::new(64, 64);
+  fn test_as_rgba_length() {
+    let fb = Framebuffer::new(4, 4).unwrap();
+    assert_eq!(fb.as_rgba().len(), 4 * 4 * 4);
+  }
 
-    // Paint a simple gradient so the file is visually non-trivial
+  #[test]
+  fn test_as_rgba_alpha_always_255() {
+    let mut fb = Framebuffer::new(2, 2).unwrap();
+    fb.set_pixel(0, 0, 255, 0, 0);
+    fb.set_pixel(1, 0, 0, 255, 0);
+    let rgba = fb.as_rgba();
+    // Every 4th byte should be 255
+    for chunk in rgba.chunks_exact(4) {
+      assert_eq!(chunk[3], 255);
+    }
+  }
+
+  #[test]
+  fn test_save_ppm() {
+    let mut fb = Framebuffer::new(64, 64).unwrap();
+
     for y in 0..64 {
       for x in 0..64 {
-        fb.as_mut()
-          .unwrap()
-          .set_pixel(x, y, (x * 4) as u8, (y * 4) as u8, 128);
+        fb.set_pixel(x, y, (x * 4) as u8, (y * 4) as u8, 128);
       }
     }
 
     let path = PathBuf::from("/tmp/test_output.ppm");
-    fb.as_ref()
-      .unwrap()
-      .save_ppm(&path)
-      .expect("Failed to write PPM");
+    fb.save_ppm(&path).expect("Failed to write PPM");
     assert!(path.exists());
   }
 }

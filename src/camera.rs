@@ -113,9 +113,12 @@ impl Camera {
   ) -> ScreenVertex {
     let view_space = self.view.mul_vec4(Vec4::from_vec3(v, 1.0));
     let clip_space = self.projection.mul_vec4(view_space);
+
     let ndc = clip_space.perspective_divide();
+    let ndc_flipped = Vec3::new(ndc.x, -ndc.y, ndc.z);
+
     let viewport = self.viewport_matrix(screen_width, screen_height);
-    let screen = viewport.mul_vec4(Vec4::from_vec3(ndc, 1.0));
+    let screen = viewport.mul_vec4(Vec4::from_vec3(ndc_flipped, 1.0));
     #[allow(clippy::cast_possible_truncation)]
     ScreenVertex::new(screen.x as i32, screen.y as i32, screen.z)
   }
