@@ -102,7 +102,7 @@ impl Framebuffer {
   /// Fill the entire framebuffer with a single RGB colour.
   #[allow(clippy::many_single_char_names)]
   pub fn clear(&mut self, r: u8, g: u8, b: u8) {
-    for chunk in self.data.chunks_exact_mut(4) {
+    for chunk in self.data.as_chunks_mut::<4>().0 {
       chunk[0] = r;
       chunk[1] = g;
       chunk[2] = b;
@@ -129,7 +129,7 @@ impl Framebuffer {
     writeln!(writer, "255")?;
 
     // PPM is RGB only — write the first three bytes of each RGBA quad
-    for chunk in self.data.chunks_exact(4) {
+    for chunk in self.data.as_chunks::<4>().0 {
       writer.write_all(&chunk[..3])?;
     }
 
@@ -198,7 +198,7 @@ mod tests {
     fb.set_pixel(1, 0, 0, 255, 0);
     let rgba = fb.as_rgba();
     // Every 4th byte should be 255
-    for chunk in rgba.chunks_exact(4) {
+    for chunk in rgba.as_chunks::<4>().0 {
       assert_eq!(chunk[3], 255);
     }
   }

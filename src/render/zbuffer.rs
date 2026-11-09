@@ -31,9 +31,7 @@ impl ZBuffer {
   /// Clears the depth buffer by resetting all values to [`f32::INFINITY`],
   /// making every pixel available for writing.
   pub fn clear(&mut self) {
-    for depth in &mut self.data {
-      *depth = f32::INFINITY;
-    }
+    self.data.fill(f32::INFINITY);
   }
 
   /// Returns the depth value at `(x, y)`.
