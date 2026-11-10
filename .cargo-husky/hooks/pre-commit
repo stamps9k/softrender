@@ -1,13 +1,13 @@
 #!/bin/sh
 set -e
 
-cargo fmt --check
-if [ $? -ne 0 ]; then
+if ! cargo fmt --check; then
   echo "cargo fmt found issues. Run 'cargo fmt' and re-stage."
   exit 1
 fi
-cargo clippy -- -D warnings
-cargo test --target aarch64-unknown-linux-musl --lib
+# Lint the target that actually ships; tests run natively on the host.
+cargo clippy --target wasm32-unknown-unknown -- -D warnings
+cargo test
 
 # Security audit on dependency changes (kept last: it exits early when no
 # dependency files are staged).
